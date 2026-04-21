@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Invyra 💍
 
-## Getting Started
+**Diseña, gestiona y revive tu evento en un solo lugar.**
 
-First, run the development server:
+Plataforma de invitaciones interactivas para bodas con editor visual, gestión de RSVP y álbum colaborativo.
+
+## ✨ Características
+
+- **Editor tipo Canva** - Personaliza invitaciones con drag & drop
+- **6 Plantillas profesionales** - Diseños elegantes para bodas
+- **Invitación interactiva** - Contador, mapa, historia de amor
+- **Sistema RSVP** - Confirmaciones en tiempo real con confetti
+- **Álbum colaborativo** - Los invitados suben fotos del evento
+- **Dashboard** - Estadísticas y gestión de invitados
+
+## 🚀 Inicio Rápido
+
+### 1. Instalar dependencias
+
+```bash
+npm install
+```
+
+### 2. Configurar Supabase
+
+Crea un archivo `.env.local` en la raíz del proyecto:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+```
+
+### 3. Configurar base de datos
+
+Ejecuta el SQL en `supabase/schema.sql` en el SQL Editor de Supabase.
+
+### 4. Crear Storage Buckets en Supabase
+
+- `event-photos` (público) - Para álbum colaborativo
+- `user-uploads` (público) - Para imágenes del editor
+
+### 5. Habilitar Auth con Google
+
+En Supabase Dashboard → Authentication → Providers → Google
+
+### 6. Ejecutar en desarrollo
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚂 Deploy en Railway
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Conecta tu repositorio a Railway
+2. Agrega las variables de entorno:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Railway detectará Next.js automáticamente
 
-## Learn More
+## 📁 Estructura del Proyecto
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/
+│   ├── (auth)/login/          # Página de login
+│   ├── dashboard/             # Panel del anfitrión
+│   │   ├── nuevo/             # Crear evento
+│   │   ├── editor/[eventId]/  # Editor de invitación
+│   │   └── evento/[eventId]/  # Gestión de invitados/álbum
+│   └── evento/[slug]/         # Invitación pública
+│       └── album/             # Álbum colaborativo
+├── components/
+│   ├── editor/                # Editor Fabric.js
+│   └── ui/                    # Componentes shadcn/ui
+├── data/
+│   └── templates.ts           # Plantillas de invitaciones
+├── lib/
+│   ├── supabase.ts            # Cliente Supabase
+│   └── utils.ts               # Utilidades
+└── types/
+    └── index.ts               # TypeScript types
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠️ Stack Tecnológico
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend:** Next.js 14, React, TailwindCSS
+- **Editor:** Fabric.js
+- **Animaciones:** Framer Motion
+- **Backend:** Supabase (Auth, PostgreSQL, Storage)
+- **UI:** shadcn/ui, Lucide Icons
 
-## Deploy on Vercel
+## 📝 Licencia
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
