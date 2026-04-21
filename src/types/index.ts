@@ -34,12 +34,16 @@ export interface Event {
 export interface Guest {
   id: string
   event_id: string
+  token: string
   name: string
   email?: string
   phone?: string
   status: 'pending' | 'confirmed' | 'declined'
   companions: number
+  max_companions: number
+  dietary_restrictions?: string
   message?: string
+  responded_at?: string
   created_at: string
   updated_at: string
 }

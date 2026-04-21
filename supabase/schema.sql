@@ -78,22 +78,27 @@ CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_slug ON events(slug);
 
 -- =============================================
--- TABLA: guests (invitados)
+-- TABLA: guests (invitados con token único)
 -- =============================================
 CREATE TABLE IF NOT EXISTS guests (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   event_id UUID REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+  token TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(6), 'hex'),
   name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'declined')),
   companions INTEGER DEFAULT 0,
+  max_companions INTEGER DEFAULT 1,
+  dietary_restrictions TEXT,
   message TEXT,
+  responded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_guests_event_id ON guests(event_id);
+CREATE INDEX IF NOT EXISTS idx_guests_token ON guests(token);
 
 -- =============================================
 -- TABLA: photos (álbum colaborativo)
