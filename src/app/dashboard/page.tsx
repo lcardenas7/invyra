@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase";
+import { buildSuggestedWhatsAppMessage, getOpenInviteUrl } from "@/lib/share";
 import type { Event } from "@/types";
 
 type DashboardUser = {
@@ -68,10 +69,12 @@ export default function DashboardPage() {
     setEvents(events.filter(e => e.id !== eventId));
   };
 
-  const copyEventLink = (slug: string) => {
-    const url = `${window.location.origin}/evento/${slug}`;
-    navigator.clipboard.writeText(url);
-    alert("Link copiado al portapapeles");
+  const copyWhatsAppMessage = async (event: Event) => {
+    const message = buildSuggestedWhatsAppMessage(event, window.location.origin);
+    const openUrl = getOpenInviteUrl(event.slug, window.location.origin);
+
+    await navigator.clipboard.writeText(message);
+    alert(`Mensaje sugerido copiado.\nComparte este enlace: ${openUrl}`);
   };
 
   if (loading) {
@@ -233,7 +236,8 @@ export default function DashboardPage() {
                       <Button 
                         variant="outline" 
                         size="icon"
-                        onClick={() => copyEventLink(event.slug)}
+                        title="Copiar mensaje sugerido para WhatsApp"
+                        onClick={() => copyWhatsAppMessage(event)}
                       >
                         <Share2 className="w-4 h-4" />
                       </Button>

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase";
+import { buildSuggestedWhatsAppMessage, getOpenInviteUrl } from "@/lib/share";
 import { getTemplateById } from "@/data/templates";
 import type { Event } from "@/types";
 
@@ -18,6 +19,9 @@ const CanvasEditor = dynamic(
   () => import("@/components/editor/CanvasEditor"),
   { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div></div> }
 );
+
+const DEFAULT_CASH_ENVELOPE_NOTE =
+  "Tu presencia es nuestro mejor regalo, pero si deseas obsequiarnos algo, agradecemos lluvia de sobres.";
 
 export default function EditorPage() {
   const params = useParams();
@@ -38,8 +42,9 @@ export default function EditorPage() {
     location_url: "",
     story: "",
     dress_code: "",
-    gift_registry: "",
-    bank_info: "",
+    gift_type: "none" as "none" | "gift_registry" | "cash_envelope",
+    gift_registry_url: "",
+    gift_note: "",
   });
 
   useEffect(() => {
@@ -65,6 +70,14 @@ export default function EditorPage() {
       }
 
       setEvent(eventData);
+      const hasGiftRegistry = Boolean(eventData.gift_registry?.trim());
+      const hasCashEnvelope = Boolean(eventData.bank_info?.trim());
+      const giftType = hasGiftRegistry
+        ? "gift_registry"
+        : hasCashEnvelope
+        ? "cash_envelope"
+        : "none";
+
       setFormData({
         name: eventData.name || "",
         bride_name: eventData.bride_name || "",
@@ -75,8 +88,11 @@ export default function EditorPage() {
         location_url: eventData.location_url || "",
         story: eventData.story || "",
         dress_code: eventData.dress_code || "",
-        gift_registry: eventData.gift_registry || "",
-        bank_info: eventData.bank_info || "",
+        gift_type: giftType,
+        gift_registry_url: eventData.gift_registry || "",
+        gift_note:
+          eventData.bank_info ||
+          (giftType === "cash_envelope" ? DEFAULT_CASH_ENVELOPE_NOTE : ""),
       });
       setLoading(false);
     };
@@ -100,17 +116,47 @@ export default function EditorPage() {
   const handleSaveDetails = async () => {
     if (!event) return;
     setSaving(true);
-    
+
+    const giftRegistry =
+      formData.gift_type === "gift_registry" ? formData.gift_registry_url.trim() : "";
+    const giftNote =
+      formData.gift_type === "cash_envelope"
+        ? formData.gift_note.trim() || DEFAULT_CASH_ENVELOPE_NOTE
+        : "";
+
+    if (formData.gift_type === "gift_registry" && !giftRegistry) {
+      alert("Agrega el link de tu mesa de regalos.");
+      setSaving(false);
+      return;
+    }
+
+    const updatePayload = {
+      name: formData.name,
+      bride_name: formData.bride_name,
+      groom_name: formData.groom_name,
+      date: formData.date,
+      time: formData.time,
+      location: formData.location,
+      location_url: formData.location_url,
+      story: formData.story,
+      dress_code: formData.dress_code || null,
+      gift_registry: giftRegistry || null,
+      bank_info: giftNote || null,
+      updated_at: new Date().toISOString(),
+    };
+
     const supabase = createClient();
     await supabase
       .from("events")
-      .update({
-        ...formData,
-        updated_at: new Date().toISOString()
-      })
+      .update(updatePayload)
       .eq("id", event.id);
-    
-    setEvent({ ...event, ...formData });
+
+    setEvent({
+      ...event,
+      ...updatePayload,
+      gift_registry: giftRegistry || undefined,
+      bank_info: giftNote || undefined,
+    } as Event);
     setSaving(false);
   };
 
@@ -132,9 +178,16 @@ export default function EditorPage() {
 
   const copyEventLink = () => {
     if (!event) return;
-    const url = `${window.location.origin}/evento/${event.slug}`;
+    const url = getOpenInviteUrl(event.slug, window.location.origin);
     navigator.clipboard.writeText(url);
-    alert("Link copiado al portapapeles");
+    alert("Link de compartido copiado");
+  };
+
+  const copyWhatsAppMessage = () => {
+    if (!event) return;
+    const message = buildSuggestedWhatsAppMessage(event, window.location.origin);
+    navigator.clipboard.writeText(message);
+    alert("Mensaje sugerido para WhatsApp copiado");
   };
 
   if (loading || !event) {
@@ -344,27 +397,58 @@ export default function EditorPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="gift_registry">Mesa de regalos (opcional)</Label>
-                  <Input
-                    id="gift_registry"
-                    value={formData.gift_registry}
-                    onChange={(e) => setFormData({ ...formData, gift_registry: e.target.value })}
-                    className="mt-1"
-                    placeholder="Link a tu mesa de regalos"
-                  />
+                  <Label htmlFor="gift_type">Regalos (opcional)</Label>
+                  <select
+                    id="gift_type"
+                    className="w-full mt-1 p-2 border rounded-md text-sm"
+                    value={formData.gift_type}
+                    onChange={(e) => {
+                      const nextType = e.target.value as "none" | "gift_registry" | "cash_envelope";
+                      setFormData((prev) => ({
+                        ...prev,
+                        gift_type: nextType,
+                        gift_registry_url: nextType === "gift_registry" ? prev.gift_registry_url : "",
+                        gift_note:
+                          nextType === "cash_envelope"
+                            ? prev.gift_note || DEFAULT_CASH_ENVELOPE_NOTE
+                            : "",
+                      }));
+                    }}
+                  >
+                    <option value="none">Sin indicación especial</option>
+                    <option value="gift_registry">Mesa de regalos (link)</option>
+                    <option value="cash_envelope">Lluvia de sobres</option>
+                  </select>
                 </div>
 
-                <div>
-                  <Label htmlFor="bank_info">Información bancaria (opcional)</Label>
-                  <Textarea
-                    id="bank_info"
-                    value={formData.bank_info}
-                    onChange={(e) => setFormData({ ...formData, bank_info: e.target.value })}
-                    className="mt-1"
-                    rows={3}
-                    placeholder="Banco, número de cuenta, titular..."
-                  />
-                </div>
+                {formData.gift_type === "gift_registry" && (
+                  <div>
+                    <Label htmlFor="gift_registry_url">Link de mesa de regalos</Label>
+                    <Input
+                      id="gift_registry_url"
+                      value={formData.gift_registry_url}
+                      onChange={(e) =>
+                        setFormData({ ...formData, gift_registry_url: e.target.value })
+                      }
+                      className="mt-1"
+                      placeholder="https://..."
+                    />
+                  </div>
+                )}
+
+                {formData.gift_type === "cash_envelope" && (
+                  <div>
+                    <Label htmlFor="gift_note">Mensaje de lluvia de sobres</Label>
+                    <Textarea
+                      id="gift_note"
+                      value={formData.gift_note}
+                      onChange={(e) => setFormData({ ...formData, gift_note: e.target.value })}
+                      className="mt-1"
+                      rows={3}
+                      placeholder={DEFAULT_CASH_ENVELOPE_NOTE}
+                    />
+                  </div>
+                )}
 
                 <Button 
                   onClick={handleSaveDetails}
@@ -403,15 +487,24 @@ export default function EditorPage() {
                 </div>
 
                 <div className="border-t pt-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">Link de tu invitación</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">Link de compartido</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Este enlace abre primero la experiencia de WhatsApp y luego la invitacion completa.
+                  </p>
                   <div className="flex gap-2">
                     <Input
-                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/evento/${event.slug}`}
+                      value={getOpenInviteUrl(event.slug, typeof window !== "undefined" ? window.location.origin : undefined)}
                       readOnly
                       className="flex-1"
                     />
                     <Button variant="outline" onClick={copyEventLink}>
                       Copiar
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    <Button variant="outline" onClick={copyWhatsAppMessage} className="w-full">
+                      <Share2 className="w-4 h-4 mr-2" />
+                      Copiar mensaje sugerido para WhatsApp
                     </Button>
                   </div>
                 </div>

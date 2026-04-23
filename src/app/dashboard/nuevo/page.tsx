@@ -13,6 +13,9 @@ import { createClient } from "@/lib/supabase";
 import { generateSlug } from "@/lib/utils";
 import type { Template } from "@/types";
 
+const DEFAULT_CASH_ENVELOPE_NOTE =
+  "Tu presencia es nuestro mejor regalo, pero si deseas obsequiarnos algo, agradecemos lluvia de sobres.";
+
 export default function NuevoEventoPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -28,6 +31,9 @@ export default function NuevoEventoPage() {
     time: "",
     location: "",
     location_url: "",
+    gift_type: "none",
+    gift_registry_url: "",
+    gift_note: "",
   });
 
   const filteredTemplates = useMemo(() => {
@@ -61,6 +67,16 @@ export default function NuevoEventoPage() {
 
       const eventName = formData.name || `${formData.bride_name} & ${formData.groom_name}`;
       const slug = generateSlug(eventName);
+      const giftRegistry =
+        formData.gift_type === "gift_registry" ? formData.gift_registry_url.trim() : "";
+      const giftNote =
+        formData.gift_type === "cash_envelope"
+          ? formData.gift_note.trim() || DEFAULT_CASH_ENVELOPE_NOTE
+          : "";
+
+      if (formData.gift_type === "gift_registry" && !giftRegistry) {
+        throw new Error("Agrega el link de tu mesa de regalos.");
+      }
 
       const { data: event, error } = await supabase
         .from("events")
@@ -77,6 +93,8 @@ export default function NuevoEventoPage() {
           canvas_data: selectedTemplate.canvas_data,
           bride_name: formData.bride_name,
           groom_name: formData.groom_name,
+          gift_registry: giftRegistry || null,
+          bank_info: giftNote || null,
           is_published: false,
         })
         .select()
@@ -87,7 +105,7 @@ export default function NuevoEventoPage() {
       router.push(`/dashboard/editor/${event.id}`);
     } catch (error) {
       console.error("Error creating event:", error);
-      alert("Error al crear el evento. Intenta de nuevo.");
+      alert(error instanceof Error ? error.message : "Error al crear el evento. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -389,6 +407,58 @@ export default function NuevoEventoPage() {
                     className="mt-1"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="gift_type">Regalos (opcional)</Label>
+                  <select
+                    id="gift_type"
+                    className="w-full mt-1 p-2 border rounded-md text-sm"
+                    value={formData.gift_type}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        gift_type: e.target.value,
+                        gift_registry_url: "",
+                        gift_note:
+                          e.target.value === "cash_envelope"
+                            ? DEFAULT_CASH_ENVELOPE_NOTE
+                            : "",
+                      })
+                    }
+                  >
+                    <option value="none">Sin indicación especial</option>
+                    <option value="gift_registry">Mesa de regalos (link)</option>
+                    <option value="cash_envelope">Lluvia de sobres</option>
+                  </select>
+                </div>
+
+                {formData.gift_type === "gift_registry" && (
+                  <div>
+                    <Label htmlFor="gift_registry_url">Link de mesa de regalos</Label>
+                    <Input
+                      id="gift_registry_url"
+                      placeholder="https://..."
+                      value={formData.gift_registry_url}
+                      onChange={(e) =>
+                        setFormData({ ...formData, gift_registry_url: e.target.value })
+                      }
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+
+                {formData.gift_type === "cash_envelope" && (
+                  <div>
+                    <Label htmlFor="gift_note">Mensaje de lluvia de sobres</Label>
+                    <textarea
+                      id="gift_note"
+                      placeholder={DEFAULT_CASH_ENVELOPE_NOTE}
+                      value={formData.gift_note}
+                      onChange={(e) => setFormData({ ...formData, gift_note: e.target.value })}
+                      className="w-full mt-1 p-2 border rounded-md text-sm min-h-[80px] resize-none"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between mt-8 pt-6 border-t">

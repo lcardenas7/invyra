@@ -15,6 +15,9 @@ import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase";
 import { generateSlug } from "@/lib/utils";
 
+const DEFAULT_CASH_ENVELOPE_NOTE =
+  "Tu presencia es nuestro mejor regalo, pero si deseas obsequiarnos algo, agradecemos lluvia de sobres.";
+
 export default function SubirInvitacionPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -129,7 +132,9 @@ export default function SubirInvitacionPage() {
       const giftRegistry =
         formData.gift_type === "gift_registry" ? formData.gift_registry_url.trim() : "";
       const giftNote =
-        formData.gift_type === "cash_envelope" ? formData.gift_note.trim() : "";
+        formData.gift_type === "cash_envelope"
+          ? formData.gift_note.trim() || DEFAULT_CASH_ENVELOPE_NOTE
+          : "";
       const maxCompanionsPerGuest = [0, 1, 2].includes(Number(formData.max_companions_per_guest))
         ? Number(formData.max_companions_per_guest)
         : 0;
@@ -463,7 +468,10 @@ export default function SubirInvitacionPage() {
                         ...formData,
                         gift_type: e.target.value,
                         gift_registry_url: "",
-                        gift_note: "",
+                        gift_note:
+                          e.target.value === "cash_envelope"
+                            ? DEFAULT_CASH_ENVELOPE_NOTE
+                            : "",
                       })
                     }
                   >
@@ -493,7 +501,7 @@ export default function SubirInvitacionPage() {
                     <Label htmlFor="gift_note">Mensaje de lluvia de sobres</Label>
                     <textarea
                       id="gift_note"
-                      placeholder="Tu presencia es nuestro mejor regalo, pero si deseas obsequiarnos algo, agradecemos lluvia de sobres."
+                      placeholder={DEFAULT_CASH_ENVELOPE_NOTE}
                       value={formData.gift_note}
                       onChange={(e) => setFormData({ ...formData, gift_note: e.target.value })}
                       className="w-full mt-1 p-2 border rounded-md text-sm min-h-[80px] resize-none"
