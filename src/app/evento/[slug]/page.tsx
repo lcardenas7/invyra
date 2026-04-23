@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -19,6 +19,86 @@ import { createClient } from "@/lib/supabase";
 import { formatDate, formatTime, getTimeRemaining } from "@/lib/utils";
 import { getTemplateById } from "@/data/templates";
 import type { Event, Guest, Message } from "@/types";
+
+function ParticleCanvas({ enabled }: { enabled: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+    const particles: Array<{
+      x: number;
+      y: number;
+      size: number;
+      speed: number;
+      opacity: number;
+      drift: number;
+      twinkle: number;
+      twinkleSpeed: number;
+    }> = [];
+
+    const resize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+
+    for (let i = 0; i < 55; i += 1) {
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 1.5 + 0.3,
+        speed: Math.random() * 0.3 + 0.1,
+        opacity: Math.random() * 0.5 + 0.1,
+        drift: (Math.random() - 0.5) * 0.3,
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.02 + 0.005,
+      });
+    }
+
+    let animationFrame = 0;
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      particles.forEach((particle) => {
+        particle.y -= particle.speed;
+        particle.x += particle.drift;
+        particle.twinkle += particle.twinkleSpeed;
+
+        if (particle.y < -10) {
+          particle.y = height + 10;
+          particle.x = Math.random() * width;
+        }
+
+        const alpha = particle.opacity * (0.6 + 0.4 * Math.sin(particle.twinkle));
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200, 169, 110, ${alpha})`;
+        ctx.fill();
+      });
+
+      animationFrame = requestAnimationFrame(render);
+    };
+
+    window.addEventListener("resize", resize);
+    render();
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      cancelAnimationFrame(animationFrame);
+    };
+  }, [enabled]);
+
+  if (!enabled) return null;
+
+  return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0" />;
+}
 
 export default function EventoPage() {
   const params = useParams();
@@ -160,16 +240,20 @@ export default function EventoPage() {
       typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 2;
     const alreadySeenIntro = window.localStorage.getItem(introStorageKey) === "1";
 
-    if (prefersReducedMotion || saveDataEnabled || lowPowerDevice || alreadySeenIntro) {
-      setIntroPhase("done");
-      setShowIntro(false);
-      setIsIntroComplete(true);
-      return;
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (prefersReducedMotion || saveDataEnabled || lowPowerDevice || alreadySeenIntro) {
+        setIntroPhase("done");
+        setShowIntro(false);
+        setIsIntroComplete(true);
+        return;
+      }
 
-    setIntroPhase("teaser");
-    setShowIntro(true);
-    setIsIntroComplete(false);
+      setIntroPhase("teaser");
+      setShowIntro(true);
+      setIsIntroComplete(false);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [event, introStorageKey, loading, notFound]);
 
   useEffect(() => {
@@ -298,17 +382,51 @@ export default function EventoPage() {
 
   if (!event) return null;
 
+  const isWeddingTheme = event.event_type === "wedding";
   const template = getTemplateById(event.template_id);
-  const colors = template?.colors || {
+  const colors = isWeddingTheme
+    ? {
+        primary: "#c8a96e",
+        secondary: "#0e0e1c",
+        accent: "#141428",
+        background: "#080810",
+        text: "#f0ece4",
+      }
+    : template?.colors || {
     primary: "#D4AF37",
     secondary: "#FFFFFF",
     accent: "#1a1a1a",
     background: "#FDFBF7",
     text: "#2C2C2C"
   };
+  const cardClass = isWeddingTheme
+    ? "rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm shadow-lg"
+    : "bg-white rounded-2xl shadow-lg";
+  const sectionSoftClass = isWeddingTheme ? "py-20 px-4" : "py-20 px-4 bg-white/50";
+  const rsvpInputClass = isWeddingTheme
+    ? "mt-1 bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]"
+    : "mt-1";
+  const giftSectionTitle = event.gift_registry ? "Mesa de Regalos" : "Regalos";
+  const giftDetailsTitle = event.gift_registry ? "Información Bancaria" : "Lluvia de Sobres";
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: colors.background }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ backgroundColor: colors.background }}>
+      <ParticleCanvas enabled={isWeddingTheme} />
+      {isWeddingTheme && (
+        <>
+          <div
+            className="pointer-events-none fixed inset-0 z-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200,169,110,0.12) 0%, transparent 70%), radial-gradient(ellipse 60% 40% at 20% 80%, rgba(100,80,160,0.08) 0%, transparent 60%), radial-gradient(ellipse 50% 50% at 80% 20%, rgba(200,120,80,0.05) 0%, transparent 60%)",
+            }}
+          />
+          <div className="pointer-events-none fixed left-1/2 top-1/2 z-0 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8a96e1a]" />
+          <div className="pointer-events-none fixed left-1/2 top-1/2 z-0 h-[900px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8a96e14]" />
+        </>
+      )}
+
+      <div className="relative z-10">
       {/* Intro Animation */}
       {showIntro && (
         <motion.div
@@ -332,16 +450,16 @@ export default function EventoPage() {
             whileHover={introPhase === "teaser" ? { scale: 1.02 } : undefined}
           >
             <div className="relative h-52 w-72">
-              <div className="absolute inset-0 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+              <div className={`absolute inset-0 overflow-hidden rounded-2xl shadow-2xl ${isWeddingTheme ? "border border-[#c8a96e4d] bg-gradient-to-br from-[#1a1a30] to-[#252540]" : "border border-black/10 bg-white"}`}>
                 <motion.div
-                  className="absolute left-0 right-0 top-0 h-1/2 origin-top bg-gradient-to-b from-amber-100 to-amber-50"
+                  className={`absolute left-0 right-0 top-0 h-1/2 origin-top ${isWeddingTheme ? "bg-gradient-to-b from-[#1e1e38] to-[#16162a]" : "bg-gradient-to-b from-amber-100 to-amber-50"}`}
                   style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
                   animate={{ rotateX: introPhase === "teaser" ? 0 : -165 }}
                   transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
                 />
 
                 <motion.div
-                  className="absolute bottom-3 left-4 right-4 overflow-hidden rounded-t-lg border border-black/10 bg-white"
+                  className={`absolute bottom-3 left-4 right-4 overflow-hidden rounded-t-lg border ${isWeddingTheme ? "border-[#c8a96e33] bg-gradient-to-b from-[#f8f4ef] to-[#ede8e0]" : "border-black/10 bg-white"}`}
                   animate={{
                     height: introPhase === "teaser" ? 112 : introPhase === "opening" ? 138 : 154,
                     y: introPhase === "teaser" ? 10 : 0,
@@ -380,7 +498,7 @@ export default function EventoPage() {
               </div>
             </div>
 
-            <p className="mt-5 text-sm text-gray-600">
+            <p className={`mt-5 text-sm ${isWeddingTheme ? "text-[#a09880]" : "text-gray-600"}`}>
               {introPhase === "teaser" && "Tu invitacion esta por abrirse"}
               {introPhase === "opening" && "Abriendo sobre..."}
               {introPhase === "reveal" && "Descubriendo invitacion"}
@@ -475,11 +593,14 @@ export default function EventoPage() {
       {isIntroComplete && (
         <>
       {/* Countdown Section */}
-      <section className="py-20 px-4" style={{ backgroundColor: colors.primary }}>
+      <section
+        className="py-20 px-4"
+        style={isWeddingTheme ? undefined : { backgroundColor: colors.primary }}
+      >
         <div className="max-w-4xl mx-auto text-center">
           <h2 
-            className="text-3xl md:text-4xl font-bold text-white mb-12"
-            style={{ fontFamily: 'Playfair Display, serif' }}
+            className={`text-3xl md:text-4xl font-bold mb-12 ${isWeddingTheme ? "text-[#f0ece4]" : "text-white"}`}
+            style={{ fontFamily: "Playfair Display, serif" }}
           >
             Faltan
           </h2>
@@ -496,12 +617,14 @@ export default function EventoPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="bg-white/20 backdrop-blur-sm rounded-xl p-4 md:p-6"
+                className={`rounded-xl p-4 md:p-6 ${isWeddingTheme ? "border border-[#c8a96e40] bg-[#c8a96e1a] backdrop-blur-sm" : "bg-white/20 backdrop-blur-sm"}`}
               >
-                <span className="text-3xl md:text-5xl font-bold text-white block">
+                <span className={`block text-3xl md:text-5xl font-bold ${isWeddingTheme ? "text-[#f0ece4]" : "text-white"}`}>
                   {String(item.value).padStart(2, "0")}
                 </span>
-                <span className="text-white/80 text-sm md:text-base">{item.label}</span>
+                <span className={`text-sm md:text-base ${isWeddingTheme ? "text-[#a09880]" : "text-white/80"}`}>
+                  {item.label}
+                </span>
               </motion.div>
             ))}
           </div>
@@ -536,7 +659,7 @@ export default function EventoPage() {
       )}
 
       {/* Event Details */}
-      <section className="py-20 px-4 bg-white/50">
+      <section className={sectionSoftClass}>
         <div className="max-w-4xl mx-auto">
           <motion.h2 
             className="text-3xl md:text-4xl font-bold text-center mb-12"
@@ -554,7 +677,7 @@ export default function EventoPage() {
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="bg-white rounded-2xl p-8 shadow-lg text-center"
+              className={`${cardClass} p-8 text-center`}
             >
               <Calendar className="w-12 h-12 mx-auto mb-4" style={{ color: colors.primary }} />
               <h3 className="text-xl font-semibold mb-2" style={{ color: colors.text }}>
@@ -573,7 +696,7 @@ export default function EventoPage() {
               initial={{ opacity: 0, x: 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="bg-white rounded-2xl p-8 shadow-lg text-center"
+              className={`${cardClass} p-8 text-center`}
             >
               <MapPin className="w-12 h-12 mx-auto mb-4" style={{ color: colors.primary }} />
               <h3 className="text-xl font-semibold mb-2" style={{ color: colors.text }}>
@@ -604,7 +727,7 @@ export default function EventoPage() {
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="mt-8 bg-white rounded-2xl p-8 shadow-lg text-center"
+              className={`mt-8 ${cardClass} p-8 text-center`}
             >
               <h3 className="text-xl font-semibold mb-2" style={{ color: colors.text }}>
                 Código de Vestimenta
@@ -644,7 +767,7 @@ export default function EventoPage() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               onSubmit={handleRsvpSubmit}
-              className="bg-white rounded-2xl p-8 shadow-lg space-y-6"
+              className={`${cardClass} p-8 space-y-6`}
             >
               <div>
                 <Label htmlFor="rsvp-name">Tu nombre completo *</Label>
@@ -653,7 +776,7 @@ export default function EventoPage() {
                   value={rsvpData.name}
                   onChange={(e) => setRsvpData({ ...rsvpData, name: e.target.value })}
                   required
-                  className="mt-1"
+                  className={rsvpInputClass}
                 />
               </div>
 
@@ -664,7 +787,7 @@ export default function EventoPage() {
                   type="email"
                   value={rsvpData.email}
                   onChange={(e) => setRsvpData({ ...rsvpData, email: e.target.value })}
-                  className="mt-1"
+                  className={rsvpInputClass}
                 />
               </div>
 
@@ -675,7 +798,7 @@ export default function EventoPage() {
                   type="tel"
                   value={rsvpData.phone}
                   onChange={(e) => setRsvpData({ ...rsvpData, phone: e.target.value })}
-                  className="mt-1"
+                  className={rsvpInputClass}
                 />
               </div>
 
@@ -688,7 +811,7 @@ export default function EventoPage() {
                   max={10}
                   value={rsvpData.companions}
                   onChange={(e) => setRsvpData({ ...rsvpData, companions: parseInt(e.target.value) || 0 })}
-                  className="mt-1"
+                  className={rsvpInputClass}
                 />
               </div>
 
@@ -698,7 +821,7 @@ export default function EventoPage() {
                   id="rsvp-message"
                   value={rsvpData.message}
                   onChange={(e) => setRsvpData({ ...rsvpData, message: e.target.value })}
-                  className="mt-1"
+                  className={rsvpInputClass}
                   rows={3}
                 />
               </div>
@@ -730,7 +853,7 @@ export default function EventoPage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl p-8 shadow-lg text-center"
+              className={`${cardClass} p-8 text-center`}
             >
               {rsvpStep === "confirmed" ? (
                 <>
@@ -767,7 +890,7 @@ export default function EventoPage() {
 
       {/* Gift Registry */}
       {(event.gift_registry || event.bank_info) && (
-        <section className="py-20 px-4 bg-white/50">
+        <section className={sectionSoftClass}>
           <div className="max-w-2xl mx-auto text-center">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -779,7 +902,7 @@ export default function EventoPage() {
                 className="text-3xl md:text-4xl font-bold mb-8"
                 style={{ fontFamily: 'Playfair Display, serif', color: colors.text }}
               >
-                Mesa de Regalos
+                {giftSectionTitle}
               </h2>
               
               {event.gift_registry && (
@@ -797,9 +920,9 @@ export default function EventoPage() {
               )}
 
               {event.bank_info && (
-                <div className="bg-white rounded-2xl p-6 shadow-lg mt-6">
+                <div className={`${cardClass} p-6 mt-6`}>
                   <h3 className="font-semibold mb-4" style={{ color: colors.text }}>
-                    Información Bancaria
+                    {giftDetailsTitle}
                   </h3>
                   <p className="whitespace-pre-line" style={{ color: colors.text, opacity: 0.8 }}>
                     {event.bank_info}
@@ -830,13 +953,14 @@ export default function EventoPage() {
           </motion.div>
 
           {/* Message Form */}
-          <form onSubmit={handleSendMessage} className="bg-white rounded-2xl p-6 shadow-lg mb-8">
+          <form onSubmit={handleSendMessage} className={`${cardClass} p-6 mb-8`}>
             <div className="grid sm:grid-cols-2 gap-4 mb-4">
               <Input
                 placeholder="Tu nombre"
                 value={newMessage.name}
                 onChange={(e) => setNewMessage({ ...newMessage, name: e.target.value })}
                 required
+                className={isWeddingTheme ? "bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]" : ""}
               />
               <Button 
                 type="submit"
@@ -854,6 +978,7 @@ export default function EventoPage() {
               onChange={(e) => setNewMessage({ ...newMessage, content: e.target.value })}
               required
               rows={3}
+              className={isWeddingTheme ? "bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]" : ""}
             />
           </form>
 
@@ -866,7 +991,7 @@ export default function EventoPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className="bg-white rounded-xl p-4 shadow-sm"
+                className={`${cardClass} rounded-xl p-4`}
               >
                 <p className="font-medium mb-1" style={{ color: colors.primary }}>
                   {message.guest_name}
@@ -922,6 +1047,7 @@ export default function EventoPage() {
       </footer>
         </>
       )}
+      </div>
     </div>
   );
 }

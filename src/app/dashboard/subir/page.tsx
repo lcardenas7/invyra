@@ -31,6 +31,10 @@ export default function SubirInvitacionPage() {
     time: "",
     location: "",
     location_url: "",
+    dress_code: "",
+    gift_type: "none",
+    gift_registry_url: "",
+    gift_note: "",
     message: "",
   });
 
@@ -121,6 +125,14 @@ export default function SubirInvitacionPage() {
         DEFAULT_TEMPLATE_BY_EVENT_TYPE[
           formData.event_type as keyof typeof DEFAULT_TEMPLATE_BY_EVENT_TYPE
         ] ?? DEFAULT_TEMPLATE_BY_EVENT_TYPE.wedding;
+      const giftRegistry =
+        formData.gift_type === "gift_registry" ? formData.gift_registry_url.trim() : "";
+      const giftNote =
+        formData.gift_type === "cash_envelope" ? formData.gift_note.trim() : "";
+
+      if (formData.gift_type === "gift_registry" && !giftRegistry) {
+        throw new Error("Agrega el link de tu mesa de regalos.");
+      }
 
       const { data: event, error } = await supabase
         .from("events")
@@ -137,6 +149,9 @@ export default function SubirInvitacionPage() {
           cover_image: coverUrl,
           bride_name: formData.bride_name,
           groom_name: formData.groom_name,
+          dress_code: formData.dress_code || null,
+          gift_registry: giftRegistry || null,
+          bank_info: giftNote || null,
           is_published: true,
         })
         .select()
@@ -390,6 +405,72 @@ export default function SubirInvitacionPage() {
                 </div>
 
                 <div>
+                  <Label htmlFor="dress_code">
+                    <Users className="w-4 h-4 inline mr-1" />
+                    Código de vestimenta (opcional)
+                  </Label>
+                  <Input
+                    id="dress_code"
+                    placeholder="Formal, Casual elegante, Blanco total..."
+                    value={formData.dress_code}
+                    onChange={(e) => setFormData({ ...formData, dress_code: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="gift_type">
+                    <Sparkles className="w-4 h-4 inline mr-1" />
+                    Regalos (opcional)
+                  </Label>
+                  <select
+                    id="gift_type"
+                    className="w-full mt-1 p-2 border rounded-md text-sm"
+                    value={formData.gift_type}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        gift_type: e.target.value,
+                        gift_registry_url: "",
+                        gift_note: "",
+                      })
+                    }
+                  >
+                    <option value="none">Sin indicación especial</option>
+                    <option value="gift_registry">Mesa de regalos (link)</option>
+                    <option value="cash_envelope">Lluvia de sobres</option>
+                  </select>
+                </div>
+
+                {formData.gift_type === "gift_registry" && (
+                  <div>
+                    <Label htmlFor="gift_registry_url">Link de mesa de regalos</Label>
+                    <Input
+                      id="gift_registry_url"
+                      placeholder="https://..."
+                      value={formData.gift_registry_url}
+                      onChange={(e) =>
+                        setFormData({ ...formData, gift_registry_url: e.target.value })
+                      }
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+
+                {formData.gift_type === "cash_envelope" && (
+                  <div>
+                    <Label htmlFor="gift_note">Mensaje de lluvia de sobres</Label>
+                    <textarea
+                      id="gift_note"
+                      placeholder="Tu presencia es nuestro mejor regalo, pero si deseas obsequiarnos algo, agradecemos lluvia de sobres."
+                      value={formData.gift_note}
+                      onChange={(e) => setFormData({ ...formData, gift_note: e.target.value })}
+                      className="w-full mt-1 p-2 border rounded-md text-sm min-h-[80px] resize-none"
+                    />
+                  </div>
+                )}
+
+                <div>
                   <Label htmlFor="message">Mensaje especial (opcional)</Label>
                   <textarea
                     id="message"
@@ -521,6 +602,38 @@ export default function SubirInvitacionPage() {
                     </div>
                   </div>
                 </Card>
+
+                {formData.dress_code && (
+                  <Card className="p-4 border-l-4 border-l-violet-500">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-violet-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Código de vestimenta</p>
+                        <p className="text-xs text-gray-500">{formData.dress_code}</p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {formData.gift_type !== "none" && (
+                  <Card className="p-4 border-l-4 border-l-[#D4AF37]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                        <Heart className="w-5 h-5 text-[#D4AF37]" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Regalos</p>
+                        <p className="text-xs text-gray-500">
+                          {formData.gift_type === "gift_registry"
+                            ? "Mesa de regalos con link"
+                            : "Lluvia de sobres"}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
               </div>
             </div>
 
