@@ -8,7 +8,7 @@ import confetti from "canvas-confetti";
 import { 
   Heart, Calendar, MapPin, Clock, Users, Gift, 
   MessageCircle, Camera, ChevronDown, ExternalLink,
-  Music, Pause, Play, Send, Check, X
+  Music, Pause, Play, Check, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,14 +173,13 @@ export default function EventoPage() {
   const [rsvpData, setRsvpData] = useState({
     name: storedGuestProfile.name ?? "",
     companions: sanitizeCompanions(storedGuestProfile.companions ?? 0),
+    message: "",
     status: "confirmed" as "confirmed" | "declined",
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // Message State
-  const [newMessage, setNewMessage] = useState({ name: "", content: "" });
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [messageSent, setMessageSent] = useState(false);
+  // Message list State
+  const [messageSentFromRsvp, setMessageSentFromRsvp] = useState(false);
 
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
@@ -329,11 +328,11 @@ export default function EventoPage() {
   }, [completeIntro, introPhase, showIntro]);
 
   useEffect(() => {
-    if (!messageSent) return;
+    if (!messageSentFromRsvp) return;
 
-    const timeoutId = window.setTimeout(() => setMessageSent(false), 4500);
+    const timeoutId = window.setTimeout(() => setMessageSentFromRsvp(false), 4500);
     return () => window.clearTimeout(timeoutId);
-  }, [messageSent]);
+  }, [messageSentFromRsvp]);
 
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -349,6 +348,19 @@ export default function EventoPage() {
         spread: 70,
         origin: { y: 0.6 }
       });
+      if (rsvpData.message.trim()) {
+        setMessages((prev) => [
+          {
+            id: Date.now().toString(),
+            event_id: "demo",
+            guest_name: rsvpData.name,
+            content: rsvpData.message.trim(),
+            created_at: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
+        setMessageSentFromRsvp(true);
+      }
       setSubmittedCompanions(companionsForThisResponse);
       setRsvpStep(rsvpData.status);
       return;
@@ -385,47 +397,29 @@ export default function EventoPage() {
           origin: { y: 0.6 }
         });
       }
+
+      if (rsvpData.message.trim()) {
+        const { data: insertedMessage, error: messageError } = await supabase
+          .from("messages")
+          .insert({
+            event_id: event.id,
+            guest_name: rsvpData.name,
+            content: rsvpData.message.trim(),
+          })
+          .select()
+          .single();
+
+        if (!messageError && insertedMessage) {
+          setMessages((prev) => [insertedMessage, ...prev]);
+          setMessageSentFromRsvp(true);
+        }
+      }
+
       setSubmittedCompanions(companionsForThisResponse);
       setRsvpStep(rsvpData.status);
     }
 
     setSubmitting(false);
-  };
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!event || !newMessage.name || !newMessage.content) return;
-
-    if (slug === "demo") {
-      setMessages([
-        { id: Date.now().toString(), event_id: "demo", guest_name: newMessage.name, content: newMessage.content, created_at: new Date().toISOString() },
-        ...messages
-      ]);
-      setNewMessage({ name: "", content: "" });
-      setMessageSent(true);
-      return;
-    }
-
-    setSendingMessage(true);
-
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        event_id: event.id,
-        guest_name: newMessage.name,
-        content: newMessage.content,
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
-      setMessages([data, ...messages]);
-      setNewMessage({ name: "", content: "" });
-      setMessageSent(true);
-    }
-
-    setSendingMessage(false);
   };
 
   if (loading) {
@@ -867,6 +861,46 @@ export default function EventoPage() {
             </p>
           </motion.div>
 
+          {(event.gift_registry || event.bank_info) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className={`${cardClass} p-6 mb-6`}
+            >
+              <h3 className="text-xl font-semibold mb-4 text-center" style={{ color: colors.text }}>
+                {giftSectionTitle}
+              </h3>
+
+              {event.gift_registry && (
+                <div className="text-center mb-4">
+                  <a
+                    href={event.gift_registry}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-white transition-transform hover:scale-105"
+                    style={{ backgroundColor: colors.primary }}
+                  >
+                    <Gift className="w-4 h-4" />
+                    Ver mesa de regalos
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              )}
+
+              {event.bank_info && (
+                <div className="rounded-xl border p-4" style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)" }}>
+                  <p className="text-sm font-medium mb-2" style={{ color: colors.text }}>
+                    {giftDetailsTitle}
+                  </p>
+                  <p className="text-sm whitespace-pre-line" style={{ color: colors.text, opacity: 0.8 }}>
+                    {event.bank_info}
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {rsvpStep === "form" ? (
             <motion.form
               initial={{ opacity: 0 }}
@@ -950,10 +984,24 @@ export default function EventoPage() {
                 </div>
               )}
 
-              <div className="flex gap-4">
+              <div>
+                <Label htmlFor="rsvp-message" style={{ color: colors.text }}>
+                  Mensaje para los novios (opcional)
+                </Label>
+                <Textarea
+                  id="rsvp-message"
+                  value={rsvpData.message}
+                  onChange={(e) => setRsvpData({ ...rsvpData, message: e.target.value })}
+                  rows={3}
+                  className={rsvpInputClass}
+                  placeholder="Escribe unas palabras lindas..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button
                   type="submit"
-                  className="flex-1 h-12 text-white"
+                  className="w-full h-12 text-white"
                   style={{ backgroundColor: colors.primary }}
                   disabled={submitting || !rsvpData.name}
                   onClick={() => setRsvpData({ ...rsvpData, status: "confirmed" })}
@@ -964,7 +1012,7 @@ export default function EventoPage() {
                 <Button
                   type="submit"
                   variant="outline"
-                  className="flex-1 h-12"
+                  className="w-full h-12"
                   disabled={submitting || !rsvpData.name}
                   onClick={() => setRsvpData({ ...rsvpData, status: "declined" })}
                 >
@@ -1027,52 +1075,6 @@ export default function EventoPage() {
         </div>
       </section>
 
-      {/* Gift Registry */}
-      {(event.gift_registry || event.bank_info) && (
-        <section className={sectionSoftClass}>
-          <div className="max-w-2xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
-              <Gift className="w-12 h-12 mx-auto mb-4" style={{ color: colors.primary }} />
-              <h2 
-                className="text-3xl md:text-4xl font-bold mb-8"
-                style={{ fontFamily: 'Playfair Display, serif', color: colors.text }}
-              >
-                {giftSectionTitle}
-              </h2>
-              
-              {event.gift_registry && (
-                <a 
-                  href={event.gift_registry}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-white mb-6 transition-transform hover:scale-105"
-                  style={{ backgroundColor: colors.primary }}
-                >
-                  <Gift className="w-5 h-5" />
-                  Ver mesa de regalos
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              )}
-
-              {event.bank_info && (
-                <div className={`${cardClass} p-6 mt-6`}>
-                  <h3 className="font-semibold mb-4" style={{ color: colors.text }}>
-                    {giftDetailsTitle}
-                  </h3>
-                  <p className="whitespace-pre-line" style={{ color: colors.text, opacity: 0.8 }}>
-                    {event.bank_info}
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        </section>
-      )}
-
       {/* Messages Section */}
       <section className="py-20 px-4">
         <div className="max-w-2xl mx-auto">
@@ -1091,39 +1093,10 @@ export default function EventoPage() {
             </h2>
           </motion.div>
 
-          {/* Message Form */}
-          <form onSubmit={handleSendMessage} className={`${cardClass} p-6 mb-8`}>
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <Input
-                placeholder="Tu nombre"
-                value={newMessage.name}
-                onChange={(e) => setNewMessage({ ...newMessage, name: e.target.value })}
-                required
-                className={isWeddingTheme ? "bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]" : ""}
-              />
-              <Button 
-                type="submit"
-                disabled={sendingMessage || !newMessage.name || !newMessage.content}
-                style={{ backgroundColor: colors.primary }}
-                className="text-white"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Enviar
-              </Button>
-            </div>
-            <Textarea
-              placeholder="Escribe tu mensaje de buenos deseos..."
-              value={newMessage.content}
-              onChange={(e) => setNewMessage({ ...newMessage, content: e.target.value })}
-              required
-              rows={3}
-              className={isWeddingTheme ? "bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]" : ""}
-            />
-          </form>
-
-          {messageSent && (
+          {messageSentFromRsvp && (
             <div className={`${cardClass} rounded-xl p-4 mb-6 text-sm`} style={{ color: colors.text }}>
-              Gracias por tu mensaje. Cuando termine el evento, sube tus fotos aqui:{" "}
+              Gracias por tu mensaje. Quedo guardado junto con tu confirmacion.
+              Cuando termine el evento, sube tus fotos aqui:{" "}
               <Link
                 href={`/evento/${slug}/album`}
                 className="underline underline-offset-4"
