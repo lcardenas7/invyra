@@ -35,6 +35,14 @@ export default function SubirInvitacionPage() {
   });
 
   const COVER_UPLOAD_BUCKETS = ["event-covers", "event-photos", "user-uploads"] as const;
+  const DEFAULT_TEMPLATE_BY_EVENT_TYPE = {
+    wedding: "wedding-gold-classic",
+    birthday: "birthday-golden",
+    baby_shower: "baby-blue-clouds",
+    graduation: "grad-classic-blue",
+    corporate: "corp-professional",
+    other: "wedding-gold-classic",
+  } as const;
 
   const formatErrorMessage = (error: unknown, fallback: string) => {
     if (!error || typeof error !== "object") return fallback;
@@ -109,6 +117,10 @@ export default function SubirInvitacionPage() {
 
       const eventName = formData.name || `${formData.bride_name} & ${formData.groom_name}`;
       const slug = generateSlug(eventName);
+      const templateId =
+        DEFAULT_TEMPLATE_BY_EVENT_TYPE[
+          formData.event_type as keyof typeof DEFAULT_TEMPLATE_BY_EVENT_TYPE
+        ] ?? DEFAULT_TEMPLATE_BY_EVENT_TYPE.wedding;
 
       const { data: event, error } = await supabase
         .from("events")
@@ -117,6 +129,7 @@ export default function SubirInvitacionPage() {
           name: eventName,
           slug,
           event_type: formData.event_type,
+          template_id: templateId,
           date: formData.date,
           time: formData.time,
           location: formData.location,
