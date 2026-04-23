@@ -172,7 +172,7 @@ export default function EventoPage() {
   const [rsvpStep, setRsvpStep] = useState<"form" | "confirmed" | "declined">("form");
   const [rsvpData, setRsvpData] = useState({
     name: storedGuestProfile.name ?? "",
-    bringCompanions: sanitizeCompanions(storedGuestProfile.companions ?? 0) > 0,
+    companions: sanitizeCompanions(storedGuestProfile.companions ?? 0),
     status: "confirmed" as "confirmed" | "declined",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -180,6 +180,7 @@ export default function EventoPage() {
   // Message State
   const [newMessage, setNewMessage] = useState({ name: "", content: "" });
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageSent, setMessageSent] = useState(false);
 
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
@@ -327,11 +328,18 @@ export default function EventoPage() {
     };
   }, [completeIntro, introPhase, showIntro]);
 
+  useEffect(() => {
+    if (!messageSent) return;
+
+    const timeoutId = window.setTimeout(() => setMessageSent(false), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [messageSent]);
+
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const companionsForThisResponse =
-      rsvpData.status === "confirmed" && rsvpData.bringCompanions
-        ? rsvpMaxCompanions
+      rsvpData.status === "confirmed"
+        ? Math.min(rsvpMaxCompanions, sanitizeCompanions(rsvpData.companions))
         : 0;
 
     if (!event || slug === "demo") {
@@ -394,6 +402,7 @@ export default function EventoPage() {
         ...messages
       ]);
       setNewMessage({ name: "", content: "" });
+      setMessageSent(true);
       return;
     }
 
@@ -413,6 +422,7 @@ export default function EventoPage() {
     if (!error && data) {
       setMessages([data, ...messages]);
       setNewMessage({ name: "", content: "" });
+      setMessageSent(true);
     }
 
     setSendingMessage(false);
@@ -866,7 +876,9 @@ export default function EventoPage() {
               className={`${cardClass} p-8 space-y-6`}
             >
               <div>
-                <Label htmlFor="rsvp-name">Tu nombre completo *</Label>
+                <Label htmlFor="rsvp-name" style={{ color: colors.text }}>
+                  Tu nombre completo *
+                </Label>
                 <Input
                   id="rsvp-name"
                   value={rsvpData.name}
@@ -878,29 +890,64 @@ export default function EventoPage() {
 
 
               {rsvpMaxCompanions > 0 && (
-                <label
-                  htmlFor="rsvp-companions-check"
-                  className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3"
-                  style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)" }}
-                >
-                  <span className="text-sm" style={{ color: colors.text }}>
-                    {rsvpMaxCompanions === 1
-                      ? "Llevare 1 acompanante"
-                      : "Llevare 2 acompanantes"}
-                  </span>
-                  <input
-                    id="rsvp-companions-check"
-                    type="checkbox"
-                    checked={rsvpData.bringCompanions}
-                    onChange={(e) =>
-                      setRsvpData({
-                        ...rsvpData,
-                        bringCompanions: e.target.checked,
-                      })
-                    }
-                    className="h-5 w-5 accent-[#c8a96e]"
-                  />
-                </label>
+                <div className="space-y-3">
+                  <p className="text-sm" style={{ color: colors.text }}>
+                    Acompanantes
+                  </p>
+
+                  <label
+                    htmlFor="rsvp-companion-0"
+                    className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3"
+                    style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)" }}
+                  >
+                    <span className="text-sm" style={{ color: colors.text }}>
+                      Sin acompanante
+                    </span>
+                    <input
+                      id="rsvp-companion-0"
+                      type="checkbox"
+                      checked={rsvpData.companions === 0}
+                      onChange={() => setRsvpData({ ...rsvpData, companions: 0 })}
+                      className="h-5 w-5 accent-[#c8a96e]"
+                    />
+                  </label>
+
+                  <label
+                    htmlFor="rsvp-companion-1"
+                    className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3"
+                    style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)" }}
+                  >
+                    <span className="text-sm" style={{ color: colors.text }}>
+                      Llevare 1 acompanante
+                    </span>
+                    <input
+                      id="rsvp-companion-1"
+                      type="checkbox"
+                      checked={rsvpData.companions === 1}
+                      onChange={() => setRsvpData({ ...rsvpData, companions: 1 })}
+                      className="h-5 w-5 accent-[#c8a96e]"
+                    />
+                  </label>
+
+                  {rsvpMaxCompanions >= 2 && (
+                    <label
+                      htmlFor="rsvp-companion-2"
+                      className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3"
+                      style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)" }}
+                    >
+                      <span className="text-sm" style={{ color: colors.text }}>
+                        Llevare 2 acompanantes
+                      </span>
+                      <input
+                        id="rsvp-companion-2"
+                        type="checkbox"
+                        checked={rsvpData.companions === 2}
+                        onChange={() => setRsvpData({ ...rsvpData, companions: 2 })}
+                        className="h-5 w-5 accent-[#c8a96e]"
+                      />
+                    </label>
+                  )}
+                </div>
               )}
 
               <div className="flex gap-4">
@@ -945,9 +992,22 @@ export default function EventoPage() {
                   </h3>
                   <p style={{ color: colors.text, opacity: 0.8 }}>
                     {submittedCompanions > 0
-                      ? `Nos vemos en la celebración con ${submittedCompanions} acompañante${submittedCompanions > 1 ? "s" : ""}`
-                      : "Nos vemos en la celebración"}
+                      ? `Nos vemos en la celebracion con ${submittedCompanions} acompanante${submittedCompanions > 1 ? "s" : ""}`
+                      : "Nos vemos en la celebracion"}
                   </p>
+                  <p className="mt-3 text-sm" style={{ color: colors.text, opacity: 0.75 }}>
+                    Recuerda: despues del evento podras subir fotos en el album colaborativo.
+                  </p>
+                  <Link href={`/evento/${slug}/album`} className="inline-flex mt-4">
+                    <Button
+                      size="sm"
+                      className="text-white"
+                      style={{ backgroundColor: colors.primary }}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Ir al album de fotos
+                    </Button>
+                  </Link>
                 </>
               ) : (
                 <>
@@ -1061,6 +1121,19 @@ export default function EventoPage() {
             />
           </form>
 
+          {messageSent && (
+            <div className={`${cardClass} rounded-xl p-4 mb-6 text-sm`} style={{ color: colors.text }}>
+              Gracias por tu mensaje. Cuando termine el evento, sube tus fotos aqui:{" "}
+              <Link
+                href={`/evento/${slug}/album`}
+                className="underline underline-offset-4"
+                style={{ color: colors.primary }}
+              >
+                /evento/{slug}/album
+              </Link>
+            </div>
+          )}
+
           {/* Messages List */}
           <div className="space-y-4">
             {messages.map((message, index) => (
@@ -1100,6 +1173,9 @@ export default function EventoPage() {
           </h2>
           <p className="text-white/80 mb-8 max-w-md mx-auto">
             Confirma tu asistencia con tus datos y luego comparte tus fotos con nosotros
+          </p>
+          <p className="text-white/90 text-sm mb-4">
+            Enlace directo del album: /evento/{slug}/album
           </p>
           <Link href={`/evento/${slug}/album`}>
             <Button 

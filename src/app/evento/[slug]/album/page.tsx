@@ -137,6 +137,7 @@ export default function AlbumPage() {
     }
 
     setUploading(true);
+    const uploadErrors: string[] = [];
 
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) continue;
@@ -188,12 +189,31 @@ export default function AlbumPage() {
         }
       } catch (error) {
         console.error("Error uploading photo:", error);
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? String((error as { message?: string }).message)
+            : "Error desconocido";
+        uploadErrors.push(`${file.name}: ${message}`);
       }
     }
 
     setUploading(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+
+    if (uploadErrors.length > 0) {
+      const hasRlsError = uploadErrors.some((item) =>
+        item.toLowerCase().includes("row-level security policy")
+      );
+
+      if (hasRlsError) {
+        alert(
+          "No se pudieron subir algunas fotos porque la politica de Storage del bucket 'event-photos' esta bloqueando INSERT para invitados. Revisa políticas RLS de Storage."
+        );
+      } else {
+        alert(`No se pudieron subir ${uploadErrors.length} foto(s). Intenta de nuevo.`);
+      }
     }
   };
 
