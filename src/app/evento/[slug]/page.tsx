@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -23,12 +23,15 @@ import type { Event, Guest, Message } from "@/types";
 export default function EventoPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const introStorageKey = `invyra:intro-seen:${slug}`;
   
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [isEnvelopeOpen, setIsEnvelopeOpen] = useState(false);
+  const [introPhase, setIntroPhase] = useState<"teaser" | "opening" | "reveal" | "done">("teaser");
+  const [showIntro, setShowIntro] = useState(false);
+  const [isIntroComplete, setIsIntroComplete] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   
   // RSVP State
@@ -50,6 +53,27 @@ export default function EventoPage() {
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
+
+  const completeIntro = useCallback(() => {
+    setIntroPhase("done");
+    setShowIntro(false);
+    setIsIntroComplete(true);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(introStorageKey, "1");
+    }
+  }, [introStorageKey]);
+
+  const handleEnvelopeAction = () => {
+    if (introPhase === "teaser") {
+      setIntroPhase("opening");
+      return;
+    }
+
+    if (introPhase === "reveal") {
+      completeIntro();
+    }
+  };
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -126,11 +150,45 @@ export default function EventoPage() {
     return () => clearInterval(interval);
   }, [event]);
 
-  // Auto-open envelope after delay
   useEffect(() => {
-    const timer = setTimeout(() => setIsEnvelopeOpen(true), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    if (loading || notFound || !event || typeof window === "undefined") return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const navWithConnection = navigator as Navigator & { connection?: { saveData?: boolean } };
+    const saveDataEnabled = navWithConnection.connection?.saveData === true;
+    const lowPowerDevice =
+      typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 2;
+    const alreadySeenIntro = window.localStorage.getItem(introStorageKey) === "1";
+
+    if (prefersReducedMotion || saveDataEnabled || lowPowerDevice || alreadySeenIntro) {
+      setIntroPhase("done");
+      setShowIntro(false);
+      setIsIntroComplete(true);
+      return;
+    }
+
+    setIntroPhase("teaser");
+    setShowIntro(true);
+    setIsIntroComplete(false);
+  }, [event, introStorageKey, loading, notFound]);
+
+  useEffect(() => {
+    if (!showIntro || introPhase === "done") return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    if (introPhase === "teaser") {
+      timer = setTimeout(() => setIntroPhase("opening"), 1500);
+    } else if (introPhase === "opening") {
+      timer = setTimeout(() => setIntroPhase("reveal"), 1200);
+    } else if (introPhase === "reveal") {
+      timer = setTimeout(() => completeIntro(), 1400);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [completeIntro, introPhase, showIntro]);
 
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,24 +309,82 @@ export default function EventoPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.background }}>
-      {/* Envelope Animation */}
-      {!isEnvelopeOpen && (
-        <motion.div 
-          className="fixed inset-0 z-50 flex items-center justify-center"
+      {/* Intro Animation */}
+      {showIntro && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
           style={{ backgroundColor: colors.background }}
-          initial={{ opacity: 1 }}
-          animate={{ opacity: isEnvelopeOpen ? 0 : 1 }}
-          transition={{ duration: 0.5 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
         >
-          <motion.div
-            className="relative cursor-pointer"
-            onClick={() => setIsEnvelopeOpen(true)}
-            whileHover={{ scale: 1.05 }}
+          <button
+            type="button"
+            onClick={completeIntro}
+            className="absolute right-4 top-4 rounded-full border px-4 py-2 text-sm font-medium transition-colors hover:bg-black/5"
+            style={{ borderColor: colors.primary, color: colors.text }}
           >
-            <div className="w-64 h-48 bg-white rounded-lg shadow-2xl flex items-center justify-center">
-              <Heart className="w-12 h-12" style={{ color: colors.primary }} />
+            Saltar animacion
+          </button>
+
+          <motion.div
+            className="relative cursor-pointer text-center"
+            onClick={handleEnvelopeAction}
+            whileHover={introPhase === "teaser" ? { scale: 1.02 } : undefined}
+          >
+            <div className="relative h-52 w-72">
+              <div className="absolute inset-0 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+                <motion.div
+                  className="absolute left-0 right-0 top-0 h-1/2 origin-top bg-gradient-to-b from-amber-100 to-amber-50"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
+                  animate={{ rotateX: introPhase === "teaser" ? 0 : -165 }}
+                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                />
+
+                <motion.div
+                  className="absolute bottom-3 left-4 right-4 overflow-hidden rounded-t-lg border border-black/10 bg-white"
+                  animate={{
+                    height: introPhase === "teaser" ? 112 : introPhase === "opening" ? 138 : 154,
+                    y: introPhase === "teaser" ? 10 : 0,
+                  }}
+                  transition={{ duration: 0.8 }}
+                >
+                  {event.cover_image ? (
+                    <motion.img
+                      src={event.cover_image}
+                      alt={event.name}
+                      className="h-full w-full object-cover"
+                      animate={{
+                        opacity: introPhase === "reveal" ? 1 : 0.55,
+                        scale: introPhase === "reveal" ? 1 : 1.04,
+                        filter: introPhase === "reveal" ? "blur(0px)" : "blur(1.5px)",
+                      }}
+                      transition={{ duration: 0.6 }}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-4 text-center">
+                      <p className="text-sm font-semibold" style={{ color: colors.primary }}>
+                        {event.bride_name} & {event.groom_name}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+
+                <motion.div
+                  className="absolute left-1/2 top-1/2 z-10 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow"
+                  style={{ backgroundColor: colors.primary }}
+                  animate={{ scale: introPhase === "teaser" ? 1 : 0, opacity: introPhase === "teaser" ? 1 : 0 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <Heart className="h-5 w-5" />
+                </motion.div>
+              </div>
             </div>
-            <p className="text-center mt-4 text-gray-600">Toca para abrir</p>
+
+            <p className="mt-5 text-sm text-gray-600">
+              {introPhase === "teaser" && "Tu invitacion esta por abrirse"}
+              {introPhase === "opening" && "Abriendo sobre..."}
+              {introPhase === "reveal" && "Descubriendo invitacion"}
+            </p>
           </motion.div>
         </motion.div>
       )}
@@ -280,7 +396,7 @@ export default function EventoPage() {
       >
         <motion.div
           initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: isEnvelopeOpen ? 1 : 0, y: isEnvelopeOpen ? 0 : 30 }}
+          animate={{ opacity: isIntroComplete ? 1 : 0, y: isIntroComplete ? 0 : 30 }}
           transition={{ delay: 0.3, duration: 0.8 }}
           className="text-center max-w-2xl mx-auto w-full"
         >
@@ -345,15 +461,19 @@ export default function EventoPage() {
         </motion.div>
 
         {/* Scroll indicator */}
-        <motion.div 
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-          animate={{ y: [0, 10, 0] }}
-          transition={{ repeat: Infinity, duration: 2 }}
-        >
-          <ChevronDown className="w-8 h-8" style={{ color: colors.primary }} />
-        </motion.div>
+        {isIntroComplete && (
+          <motion.div 
+            className="absolute bottom-8 left-1/2 -translate-x-1/2"
+            animate={{ y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
+            <ChevronDown className="w-8 h-8" style={{ color: colors.primary }} />
+          </motion.div>
+        )}
       </motion.section>
 
+      {isIntroComplete && (
+        <>
       {/* Countdown Section */}
       <section className="py-20 px-4" style={{ backgroundColor: colors.primary }}>
         <div className="max-w-4xl mx-auto text-center">
@@ -800,6 +920,8 @@ export default function EventoPage() {
           Hecho con amor en Invyra
         </p>
       </footer>
+        </>
+      )}
     </div>
   );
 }
