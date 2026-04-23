@@ -183,7 +183,7 @@ export default function DashboardPage() {
                     {event.name}
                   </h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    {new Date(event.date).toLocaleDateString("es-ES", {
+                    {new Date(`${event.date}T12:00:00`).toLocaleDateString("es-ES", {
                       day: "numeric",
                       month: "long",
                       year: "numeric"

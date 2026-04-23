@@ -32,6 +32,7 @@ export default function SubirInvitacionPage() {
     location: "",
     location_url: "",
     dress_code: "",
+    max_companions_per_guest: 0,
     gift_type: "none",
     gift_registry_url: "",
     gift_note: "",
@@ -129,6 +130,9 @@ export default function SubirInvitacionPage() {
         formData.gift_type === "gift_registry" ? formData.gift_registry_url.trim() : "";
       const giftNote =
         formData.gift_type === "cash_envelope" ? formData.gift_note.trim() : "";
+      const maxCompanionsPerGuest = [0, 1, 2].includes(Number(formData.max_companions_per_guest))
+        ? Number(formData.max_companions_per_guest)
+        : 0;
 
       if (formData.gift_type === "gift_registry" && !giftRegistry) {
         throw new Error("Agrega el link de tu mesa de regalos.");
@@ -149,6 +153,11 @@ export default function SubirInvitacionPage() {
           cover_image: coverUrl,
           bride_name: formData.bride_name,
           groom_name: formData.groom_name,
+          canvas_data: {
+            rsvp: {
+              max_companions_per_guest: maxCompanionsPerGuest,
+            },
+          },
           dress_code: formData.dress_code || null,
           gift_registry: giftRegistry || null,
           bank_info: giftNote || null,
@@ -419,6 +428,28 @@ export default function SubirInvitacionPage() {
                 </div>
 
                 <div>
+                  <Label htmlFor="max_companions_per_guest">
+                    <Users className="w-4 h-4 inline mr-1" />
+                    Acompañantes por invitado
+                  </Label>
+                  <select
+                    id="max_companions_per_guest"
+                    className="w-full mt-1 p-2 border rounded-md text-sm"
+                    value={formData.max_companions_per_guest}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        max_companions_per_guest: Number(e.target.value),
+                      })
+                    }
+                  >
+                    <option value={0}>No permite acompañantes</option>
+                    <option value={1}>Permitir 1 acompañante</option>
+                    <option value={2}>Permitir 2 acompañantes</option>
+                  </select>
+                </div>
+
+                <div>
                   <Label htmlFor="gift_type">
                     <Sparkles className="w-4 h-4 inline mr-1" />
                     Regalos (opcional)
@@ -562,7 +593,14 @@ export default function SubirInvitacionPage() {
                     </div>
                     <div>
                       <p className="font-medium text-sm">Confirmar asistencia (RSVP)</p>
-                      <p className="text-xs text-gray-500">Formulario con confetti de celebración</p>
+                      <p className="text-xs text-gray-500">
+                        {formData.max_companions_per_guest === 0 &&
+                          "Solo nombre y confirmación (sin acompañantes)"}
+                        {formData.max_companions_per_guest === 1 &&
+                          "Nombre + check para 1 acompañante"}
+                        {formData.max_companions_per_guest === 2 &&
+                          "Nombre + check para 2 acompañantes"}
+                      </p>
                     </div>
                   </div>
                 </Card>

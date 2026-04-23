@@ -16,9 +16,60 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase";
-import { formatDate, formatTime, getTimeRemaining } from "@/lib/utils";
+import { combineDateAndTime, formatDate, formatTime, getTimeRemaining } from "@/lib/utils";
 import { getTemplateById } from "@/data/templates";
 import type { Event, Guest, Message } from "@/types";
+
+type StoredGuestProfile = {
+  name?: string;
+  companions?: number;
+};
+
+const sanitizeCompanions = (value: number) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(2, Math.max(0, Math.floor(value)));
+};
+
+const getStoredGuestProfile = (storageKey: string): StoredGuestProfile => {
+  if (typeof window === "undefined") return {};
+
+  const rawGuestProfile = window.localStorage.getItem(storageKey);
+  if (!rawGuestProfile) return {};
+
+  try {
+    return JSON.parse(rawGuestProfile) as StoredGuestProfile;
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return {};
+  }
+};
+
+const getRsvpMaxCompanions = (event: Event | null): number => {
+  if (!event?.canvas_data) return 0;
+
+  try {
+    const canvasData =
+      typeof event.canvas_data === "string"
+        ? JSON.parse(event.canvas_data)
+        : event.canvas_data;
+
+    if (
+      canvasData &&
+      typeof canvasData === "object" &&
+      "rsvp" in canvasData &&
+      canvasData.rsvp &&
+      typeof canvasData.rsvp === "object" &&
+      "max_companions_per_guest" in canvasData.rsvp
+    ) {
+      const rawValue = Number(canvasData.rsvp.max_companions_per_guest);
+      return sanitizeCompanions(rawValue);
+    }
+  } catch {
+    return 0;
+  }
+
+  return 0;
+};
 
 function ParticleCanvas({ enabled }: { enabled: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -104,6 +155,7 @@ export default function EventoPage() {
   const params = useParams();
   const slug = params.slug as string;
   const introStorageKey = `invyra:intro-seen:${slug}`;
+  const guestProfileStorageKey = `invyra:guest-profile:${slug}`;
   
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,15 +165,14 @@ export default function EventoPage() {
   const [showIntro, setShowIntro] = useState(false);
   const [isIntroComplete, setIsIntroComplete] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [storedGuestProfile] = useState(() => getStoredGuestProfile(guestProfileStorageKey));
+  const [submittedCompanions, setSubmittedCompanions] = useState(0);
   
   // RSVP State
   const [rsvpStep, setRsvpStep] = useState<"form" | "confirmed" | "declined">("form");
   const [rsvpData, setRsvpData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    companions: 0,
-    message: "",
+    name: storedGuestProfile.name ?? "",
+    bringCompanions: sanitizeCompanions(storedGuestProfile.companions ?? 0) > 0,
     status: "confirmed" as "confirmed" | "declined",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -133,6 +184,7 @@ export default function EventoPage() {
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
+  const rsvpMaxCompanions = getRsvpMaxCompanions(event);
 
   const completeIntro = useCallback(() => {
     setIntroPhase("done");
@@ -170,6 +222,7 @@ export default function EventoPage() {
           location: "Hacienda Los Robles",
           location_url: "https://maps.google.com",
           template_id: "wedding-elegant-classic",
+          canvas_data: JSON.stringify({ rsvp: { max_companions_per_guest: 1 } }),
           bride_name: "María",
           groom_name: "Juan",
           story: "Nos conocimos en una cafetería hace 5 años. Desde ese primer café, supimos que algo especial estaba comenzando. Después de muchas aventuras juntos, decidimos dar el siguiente paso y celebrar nuestro amor con todos ustedes.",
@@ -221,7 +274,7 @@ export default function EventoPage() {
     if (!event) return;
 
     const updateCountdown = () => {
-      const eventDateTime = new Date(`${event.date}T${event.time}`);
+      const eventDateTime = combineDateAndTime(event.date, event.time);
       setCountdown(getTimeRemaining(eventDateTime));
     };
 
@@ -262,11 +315,11 @@ export default function EventoPage() {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     if (introPhase === "teaser") {
-      timer = setTimeout(() => setIntroPhase("opening"), 1500);
+      timer = setTimeout(() => setIntroPhase("opening"), 1900);
     } else if (introPhase === "opening") {
-      timer = setTimeout(() => setIntroPhase("reveal"), 1200);
+      timer = setTimeout(() => setIntroPhase("reveal"), 1500);
     } else if (introPhase === "reveal") {
-      timer = setTimeout(() => completeIntro(), 1400);
+      timer = setTimeout(() => completeIntro(), 1650);
     }
 
     return () => {
@@ -276,6 +329,11 @@ export default function EventoPage() {
 
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const companionsForThisResponse =
+      rsvpData.status === "confirmed" && rsvpData.bringCompanions
+        ? rsvpMaxCompanions
+        : 0;
+
     if (!event || slug === "demo") {
       // Demo mode
       confetti({
@@ -283,6 +341,7 @@ export default function EventoPage() {
         spread: 70,
         origin: { y: 0.6 }
       });
+      setSubmittedCompanions(companionsForThisResponse);
       setRsvpStep(rsvpData.status);
       return;
     }
@@ -295,14 +354,22 @@ export default function EventoPage() {
       .insert({
         event_id: event.id,
         name: rsvpData.name,
-        email: rsvpData.email,
-        phone: rsvpData.phone,
-        companions: rsvpData.companions,
-        message: rsvpData.message,
+        companions: companionsForThisResponse,
+        max_companions: rsvpMaxCompanions,
         status: rsvpData.status,
       });
 
     if (!error) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          guestProfileStorageKey,
+          JSON.stringify({
+            name: rsvpData.name.trim(),
+            companions: companionsForThisResponse,
+          })
+        );
+      }
+
       if (rsvpData.status === "confirmed") {
         confetti({
           particleCount: 100,
@@ -310,6 +377,7 @@ export default function EventoPage() {
           origin: { y: 0.6 }
         });
       }
+      setSubmittedCompanions(companionsForThisResponse);
       setRsvpStep(rsvpData.status);
     }
 
@@ -447,24 +515,34 @@ export default function EventoPage() {
           <motion.div
             className="relative cursor-pointer text-center"
             onClick={handleEnvelopeAction}
-            whileHover={introPhase === "teaser" ? { scale: 1.02 } : undefined}
+            whileHover={introPhase === "teaser" ? { scale: 1.04, y: -4 } : undefined}
           >
-            <div className="relative h-52 w-72">
-              <div className={`absolute inset-0 overflow-hidden rounded-2xl shadow-2xl ${isWeddingTheme ? "border border-[#c8a96e4d] bg-gradient-to-br from-[#1a1a30] to-[#252540]" : "border border-black/10 bg-white"}`}>
+            <div className="relative h-64 w-80 sm:h-80 sm:w-[28rem]">
+              <motion.div
+                className="absolute -inset-7 rounded-full blur-2xl"
+                style={{ background: "radial-gradient(circle, rgba(200,169,110,0.26) 0%, rgba(200,169,110,0) 70%)" }}
+                animate={{ opacity: introPhase === "teaser" ? 0.55 : introPhase === "opening" ? 0.75 : 0.92, scale: introPhase === "reveal" ? 1.08 : 1 }}
+                transition={{ duration: 0.55 }}
+              />
+              <div className={`absolute inset-0 overflow-hidden rounded-3xl shadow-2xl ${isWeddingTheme ? "border border-[#c8a96e4d] bg-gradient-to-br from-[#1a1a30] to-[#252540]" : "border border-black/10 bg-white"}`}>
                 <motion.div
-                  className={`absolute left-0 right-0 top-0 h-1/2 origin-top ${isWeddingTheme ? "bg-gradient-to-b from-[#1e1e38] to-[#16162a]" : "bg-gradient-to-b from-amber-100 to-amber-50"}`}
+                  className={`absolute left-0 right-0 top-0 h-[54%] origin-top shadow-[0_18px_30px_rgba(0,0,0,0.25)] ${isWeddingTheme ? "bg-gradient-to-b from-[#1e1e38] to-[#16162a]" : "bg-gradient-to-b from-amber-100 to-amber-50"}`}
                   style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
-                  animate={{ rotateX: introPhase === "teaser" ? 0 : -165 }}
-                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                  animate={{
+                    rotateX: introPhase === "teaser" ? 0 : -178,
+                    y: introPhase === "teaser" ? 0 : -4,
+                  }}
+                  transition={{ duration: 1.15, ease: [0.22, 1, 0.36, 1] }}
                 />
 
                 <motion.div
-                  className={`absolute bottom-3 left-4 right-4 overflow-hidden rounded-t-lg border ${isWeddingTheme ? "border-[#c8a96e33] bg-gradient-to-b from-[#f8f4ef] to-[#ede8e0]" : "border-black/10 bg-white"}`}
+                  className={`absolute bottom-4 left-6 right-6 overflow-hidden rounded-t-xl border shadow-[0_18px_38px_rgba(0,0,0,0.24)] ${isWeddingTheme ? "border-[#c8a96e33] bg-gradient-to-b from-[#f8f4ef] to-[#ede8e0]" : "border-black/10 bg-white"}`}
                   animate={{
-                    height: introPhase === "teaser" ? 112 : introPhase === "opening" ? 138 : 154,
-                    y: introPhase === "teaser" ? 10 : 0,
+                    height: introPhase === "teaser" ? 148 : introPhase === "opening" ? 198 : 230,
+                    y: introPhase === "teaser" ? 18 : introPhase === "opening" ? -2 : -12,
+                    rotateX: introPhase === "reveal" ? 0 : 5,
                   }}
-                  transition={{ duration: 0.8 }}
+                  transition={{ duration: 1.05, ease: [0.22, 1, 0.36, 1] }}
                 >
                   {event.cover_image ? (
                     <motion.img
@@ -473,10 +551,11 @@ export default function EventoPage() {
                       className="h-full w-full object-cover"
                       animate={{
                         opacity: introPhase === "reveal" ? 1 : 0.55,
-                        scale: introPhase === "reveal" ? 1 : 1.04,
+                        scale: introPhase === "reveal" ? 1 : 1.08,
+                        y: introPhase === "reveal" ? 0 : 8,
                         filter: introPhase === "reveal" ? "blur(0px)" : "blur(1.5px)",
                       }}
-                      transition={{ duration: 0.6 }}
+                      transition={{ duration: 0.75 }}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center px-4 text-center">
@@ -485,20 +564,37 @@ export default function EventoPage() {
                       </p>
                     </div>
                   )}
+                  <motion.div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/55 to-transparent"
+                    animate={{
+                      opacity: introPhase === "reveal" ? 1 : 0,
+                      x: introPhase === "reveal" ? ["-120%", "130%"] : "-120%",
+                    }}
+                    transition={{ duration: 0.95, ease: "easeOut" }}
+                  />
                 </motion.div>
 
                 <motion.div
-                  className="absolute left-1/2 top-1/2 z-10 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow"
+                  className="absolute left-1/2 top-1/2 z-10 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow"
                   style={{ backgroundColor: colors.primary }}
                   animate={{ scale: introPhase === "teaser" ? 1 : 0, opacity: introPhase === "teaser" ? 1 : 0 }}
-                  transition={{ duration: 0.35 }}
+                  transition={{ duration: 0.4 }}
                 >
-                  <Heart className="h-5 w-5" />
+                  <Heart className="h-6 w-6" />
                 </motion.div>
               </div>
+
+              <motion.div
+                className="pointer-events-none absolute inset-0 rounded-[2rem] border border-[#c8a96e45]"
+                animate={{
+                  opacity: introPhase === "reveal" ? [0, 0.75, 0] : 0,
+                  scale: introPhase === "reveal" ? [0.92, 1.04, 1.14] : 0.92,
+                }}
+                transition={{ duration: 0.9 }}
+              />
             </div>
 
-            <p className={`mt-5 text-sm ${isWeddingTheme ? "text-[#a09880]" : "text-gray-600"}`}>
+            <p className={`mt-6 text-sm sm:text-base tracking-[0.08em] ${isWeddingTheme ? "text-[#a09880]" : "text-gray-600"}`}>
               {introPhase === "teaser" && "Tu invitacion esta por abrirse"}
               {introPhase === "opening" && "Abriendo sobre..."}
               {introPhase === "reveal" && "Descubriendo invitacion"}
@@ -572,7 +668,7 @@ export default function EventoPage() {
                 className="text-lg"
                 style={{ color: colors.primary }}
               >
-                {formatTime(`2000-01-01T${event.time}`)}
+                {formatTime(combineDateAndTime(event.date, event.time))}
               </p>
             </>
           )}
@@ -687,7 +783,7 @@ export default function EventoPage() {
                 {formatDate(event.date)}
               </p>
               <p style={{ color: colors.primary }}>
-                {formatTime(`2000-01-01T${event.time}`)}
+                {formatTime(combineDateAndTime(event.date, event.time))}
               </p>
             </motion.div>
 
@@ -780,51 +876,32 @@ export default function EventoPage() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="rsvp-email">Email</Label>
-                <Input
-                  id="rsvp-email"
-                  type="email"
-                  value={rsvpData.email}
-                  onChange={(e) => setRsvpData({ ...rsvpData, email: e.target.value })}
-                  className={rsvpInputClass}
-                />
-              </div>
 
-              <div>
-                <Label htmlFor="rsvp-phone">Teléfono</Label>
-                <Input
-                  id="rsvp-phone"
-                  type="tel"
-                  value={rsvpData.phone}
-                  onChange={(e) => setRsvpData({ ...rsvpData, phone: e.target.value })}
-                  className={rsvpInputClass}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="rsvp-companions">¿Cuántos acompañantes traes?</Label>
-                <Input
-                  id="rsvp-companions"
-                  type="number"
-                  min={0}
-                  max={10}
-                  value={rsvpData.companions}
-                  onChange={(e) => setRsvpData({ ...rsvpData, companions: parseInt(e.target.value) || 0 })}
-                  className={rsvpInputClass}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="rsvp-message">Mensaje para los novios (opcional)</Label>
-                <Textarea
-                  id="rsvp-message"
-                  value={rsvpData.message}
-                  onChange={(e) => setRsvpData({ ...rsvpData, message: e.target.value })}
-                  className={rsvpInputClass}
-                  rows={3}
-                />
-              </div>
+              {rsvpMaxCompanions > 0 && (
+                <label
+                  htmlFor="rsvp-companions-check"
+                  className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3"
+                  style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)" }}
+                >
+                  <span className="text-sm" style={{ color: colors.text }}>
+                    {rsvpMaxCompanions === 1
+                      ? "Llevare 1 acompanante"
+                      : "Llevare 2 acompanantes"}
+                  </span>
+                  <input
+                    id="rsvp-companions-check"
+                    type="checkbox"
+                    checked={rsvpData.bringCompanions}
+                    onChange={(e) =>
+                      setRsvpData({
+                        ...rsvpData,
+                        bringCompanions: e.target.checked,
+                      })
+                    }
+                    className="h-5 w-5 accent-[#c8a96e]"
+                  />
+                </label>
+              )}
 
               <div className="flex gap-4">
                 <Button
@@ -867,7 +944,9 @@ export default function EventoPage() {
                     ¡Gracias por confirmar!
                   </h3>
                   <p style={{ color: colors.text, opacity: 0.8 }}>
-                    Nos vemos en la celebración
+                    {submittedCompanions > 0
+                      ? `Nos vemos en la celebración con ${submittedCompanions} acompañante${submittedCompanions > 1 ? "s" : ""}`
+                      : "Nos vemos en la celebración"}
                   </p>
                 </>
               ) : (
@@ -1020,7 +1099,7 @@ export default function EventoPage() {
             Álbum de Fotos
           </h2>
           <p className="text-white/80 mb-8 max-w-md mx-auto">
-            Después del evento, comparte tus fotos con nosotros
+            Confirma tu asistencia con tus datos y luego comparte tus fotos con nosotros
           </p>
           <Link href={`/evento/${slug}/album`}>
             <Button 

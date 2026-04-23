@@ -13,16 +13,40 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase";
 import type { Event, Photo } from "@/types";
 
+type StoredGuestProfile = {
+  name?: string;
+  email?: string;
+  phone?: string;
+};
+
+const getStoredGuestProfile = (storageKey: string): StoredGuestProfile => {
+  if (typeof window === "undefined") return {};
+
+  const rawGuestProfile = window.localStorage.getItem(storageKey);
+  if (!rawGuestProfile) return {};
+
+  try {
+    return JSON.parse(rawGuestProfile) as StoredGuestProfile;
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return {};
+  }
+};
+
 export default function AlbumPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const guestProfileStorageKey = `invyra:guest-profile:${slug}`;
   
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
-  const [guestName, setGuestName] = useState("");
+  const [storedGuestProfile] = useState(() => getStoredGuestProfile(guestProfileStorageKey));
+  const [guestName, setGuestName] = useState(storedGuestProfile.name ?? "");
+  const [guestEmail, setGuestEmail] = useState(storedGuestProfile.email ?? "");
+  const [guestPhone, setGuestPhone] = useState(storedGuestProfile.phone ?? "");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,6 +123,17 @@ export default function AlbumPage() {
     if (!files || !event || !guestName.trim()) {
       alert("Por favor ingresa tu nombre antes de subir fotos");
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        guestProfileStorageKey,
+        JSON.stringify({
+          name: guestName.trim(),
+          email: guestEmail.trim(),
+          phone: guestPhone.trim(),
+        })
+      );
     }
 
     setUploading(true);
@@ -237,6 +272,22 @@ export default function AlbumPage() {
               />
             </div>
             <div>
+              <Input
+                type="tel"
+                placeholder="Tu WhatsApp (opcional)"
+                value={guestPhone}
+                onChange={(e) => setGuestPhone(e.target.value)}
+              />
+            </div>
+            <div>
+              <Input
+                type="email"
+                placeholder="Tu email (opcional)"
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+              />
+            </div>
+            <div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -268,6 +319,11 @@ export default function AlbumPage() {
           
           {!guestName.trim() && (
             <p className="text-sm text-amber-600">Ingresa tu nombre para poder subir fotos</p>
+          )}
+          {guestName.trim() && (
+            <p className="text-sm text-gray-500">
+              Guardaremos estos datos en este dispositivo para no pedirlos de nuevo.
+            </p>
           )}
         </div>
       </section>
