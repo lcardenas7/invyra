@@ -25,9 +25,23 @@ type StoredGuestProfile = {
   companions?: number;
 };
 
+type SupabaseInsertError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
 const sanitizeCompanions = (value: number) => {
   if (!Number.isFinite(value)) return 0;
   return Math.min(2, Math.max(0, Math.floor(value)));
+};
+
+const formatSupabaseError = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== "object") return fallback;
+  const maybeError = error as SupabaseInsertError;
+  const parts = [maybeError.message, maybeError.details, maybeError.hint].filter(Boolean);
+  return parts.length > 0 ? parts.join(" | ") : fallback;
 };
 
 const getStoredGuestProfile = (storageKey: string): StoredGuestProfile => {
@@ -368,18 +382,27 @@ export default function EventoPage() {
 
     setSubmitting(true);
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("guests")
-      .insert({
+    try {
+      const supabase = createClient();
+      const guestPayload = {
         event_id: event.id,
-        name: rsvpData.name,
+        name: rsvpData.name.trim(),
         companions: companionsForThisResponse,
-        max_companions: rsvpMaxCompanions,
         status: rsvpData.status,
-      });
+      };
 
-    if (!error) {
+      const { error } = await supabase.from("guests").insert(guestPayload);
+
+      if (error) {
+        alert(
+          formatSupabaseError(
+            error,
+            "No se pudo confirmar asistencia. Revisa la configuracion RLS de guests o columnas requeridas."
+          )
+        );
+        return;
+      }
+
       if (typeof window !== "undefined") {
         window.localStorage.setItem(
           guestProfileStorageKey,
@@ -403,7 +426,7 @@ export default function EventoPage() {
           .from("messages")
           .insert({
             event_id: event.id,
-            guest_name: rsvpData.name,
+            guest_name: rsvpData.name.trim(),
             content: rsvpData.message.trim(),
           })
           .select()
@@ -417,9 +440,9 @@ export default function EventoPage() {
 
       setSubmittedCompanions(companionsForThisResponse);
       setRsvpStep(rsvpData.status);
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   if (loading) {
