@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import { 
-  Heart, Calendar, MapPin, Clock, Users, Gift, 
+  Heart, Calendar, MapPin, Clock, Users, Gift, Shirt, Banknote, 
   MessageCircle, Camera, ChevronDown, ExternalLink,
   Music, Pause, Play, Check, X
 } from "lucide-react";
@@ -478,8 +478,10 @@ export default function EventoPage() {
   const rsvpInputClass = isWeddingTheme
     ? "mt-1 bg-white/10 border-white/20 text-[#f0ece4] placeholder:text-[#a09880]"
     : "mt-1";
-  const giftSectionTitle = event.gift_registry ? "Mesa de Regalos" : "Regalos";
-  const giftDetailsTitle = event.gift_registry ? "Información Bancaria" : "Lluvia de Sobres";
+  const hasGiftInfo = Boolean(event.gift_registry || event.bank_info);
+  const giftDetailsTitle = event.gift_registry
+    ? "Lluvia de sobres / datos bancarios"
+    : "Lluvia de sobres";
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ backgroundColor: colors.background }}>
@@ -821,22 +823,87 @@ export default function EventoPage() {
             </motion.div>
           </div>
 
-          {/* Dress Code */}
-          {event.dress_code && (
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className={`mt-8 ${cardClass} p-8 text-center`}
-            >
-              <h3 className="text-xl font-semibold mb-2" style={{ color: colors.text }}>
-                Código de Vestimenta
-              </h3>
-              <p className="text-lg" style={{ color: colors.primary }}>
-                {event.dress_code}
-              </p>
-            </motion.div>
-          )}
+          <div className="grid md:grid-cols-2 gap-8 mt-8">
+            {/* Dress Code */}
+            {event.dress_code && (
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className={`${cardClass} p-8 text-center`}
+              >
+                <div
+                  className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                    isWeddingTheme ? "bg-[#c8a96e1f]" : "bg-amber-50"
+                  }`}
+                >
+                  <Shirt className="w-7 h-7" style={{ color: colors.primary }} />
+                </div>
+                <h3 className="text-xl font-semibold mb-2" style={{ color: colors.text }}>
+                  Código de Vestimenta
+                </h3>
+                <p className="text-lg" style={{ color: colors.primary }}>
+                  {event.dress_code}
+                </p>
+              </motion.div>
+            )}
+
+            {/* Gifts */}
+            {hasGiftInfo && (
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className={`${cardClass} p-8`}
+              >
+                <div
+                  className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                    isWeddingTheme ? "bg-[#c8a96e1f]" : "bg-amber-50"
+                  }`}
+                >
+                  <Gift className="w-7 h-7" style={{ color: colors.primary }} />
+                </div>
+                <h3 className="text-xl font-semibold mb-5 text-center" style={{ color: colors.text }}>
+                  Regalos
+                </h3>
+
+                <div className="space-y-4">
+                  {event.gift_registry && (
+                    <div className="text-center">
+                      <a
+                        href={event.gift_registry}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-white transition-transform hover:scale-105"
+                        style={{ backgroundColor: colors.primary }}
+                      >
+                        <Gift className="w-4 h-4" />
+                        Ver mesa de regalos
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  )}
+
+                  {event.bank_info && (
+                    <div
+                      className="rounded-xl border p-4"
+                      style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)" }}
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <Banknote className="w-4 h-4" style={{ color: colors.primary }} />
+                        <p className="text-sm font-medium" style={{ color: colors.text }}>
+                          {giftDetailsTitle}
+                        </p>
+                      </div>
+                      <p className="text-sm whitespace-pre-line" style={{ color: colors.text, opacity: 0.8 }}>
+                        {event.bank_info}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -860,46 +927,6 @@ export default function EventoPage() {
               Por favor, confirma tu asistencia antes del evento
             </p>
           </motion.div>
-
-          {(event.gift_registry || event.bank_info) && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className={`${cardClass} p-6 mb-6`}
-            >
-              <h3 className="text-xl font-semibold mb-4 text-center" style={{ color: colors.text }}>
-                {giftSectionTitle}
-              </h3>
-
-              {event.gift_registry && (
-                <div className="text-center mb-4">
-                  <a
-                    href={event.gift_registry}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-white transition-transform hover:scale-105"
-                    style={{ backgroundColor: colors.primary }}
-                  >
-                    <Gift className="w-4 h-4" />
-                    Ver mesa de regalos
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                </div>
-              )}
-
-              {event.bank_info && (
-                <div className="rounded-xl border p-4" style={{ borderColor: isWeddingTheme ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)" }}>
-                  <p className="text-sm font-medium mb-2" style={{ color: colors.text }}>
-                    {giftDetailsTitle}
-                  </p>
-                  <p className="text-sm whitespace-pre-line" style={{ color: colors.text, opacity: 0.8 }}>
-                    {event.bank_info}
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          )}
 
           {rsvpStep === "form" ? (
             <motion.form
@@ -1146,9 +1173,6 @@ export default function EventoPage() {
           </h2>
           <p className="text-white/80 mb-8 max-w-md mx-auto">
             Confirma tu asistencia con tus datos y luego comparte tus fotos con nosotros
-          </p>
-          <p className="text-white/90 text-sm mb-4">
-            Enlace directo del album: /evento/{slug}/album
           </p>
           <Link href={`/evento/${slug}/album`}>
             <Button 
