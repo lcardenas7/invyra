@@ -34,6 +34,15 @@ export default function SubirInvitacionPage() {
     message: "",
   });
 
+  const COVER_UPLOAD_BUCKETS = ["event-covers", "event-photos", "user-uploads"] as const;
+
+  const formatErrorMessage = (error: unknown, fallback: string) => {
+    if (!error || typeof error !== "object") return fallback;
+    const maybeError = error as { message?: string; details?: string; hint?: string };
+    const parts = [maybeError.message, maybeError.details, maybeError.hint].filter(Boolean);
+    return parts.length > 0 ? parts.join(" | ") : fallback;
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -64,21 +73,38 @@ export default function SubirInvitacionPage() {
       if (imageFile) {
         const fileExt = imageFile.name.split(".").pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("event-covers")
-          .upload(fileName, imageFile);
+        const uploadErrors: string[] = [];
 
-        if (!uploadError && uploadData) {
-          const { data: publicUrl } = supabase.storage
-            .from("event-covers")
-            .getPublicUrl(uploadData.path);
-          coverUrl = publicUrl.publicUrl;
+        for (const bucket of COVER_UPLOAD_BUCKETS) {
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(fileName, imageFile, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: imageFile.type,
+            });
+
+          if (uploadError) {
+            uploadErrors.push(`${bucket}: ${uploadError.message}`);
+            continue;
+          }
+
+          if (uploadData?.path) {
+            const { data: publicUrl } = supabase.storage
+              .from(bucket)
+              .getPublicUrl(uploadData.path);
+            coverUrl = publicUrl.publicUrl;
+            break;
+          }
         }
-      }
 
-      // If storage upload fails, use data URL as fallback
-      if (!coverUrl) {
-        coverUrl = uploadedImage;
+        if (!coverUrl) {
+          throw new Error(
+            `No se pudo subir la imagen de portada. Revisa buckets/politicas de Storage. ${uploadErrors.join(
+              " | "
+            )}`
+          );
+        }
       }
 
       const eventName = formData.name || `${formData.bride_name} & ${formData.groom_name}`;
@@ -108,7 +134,7 @@ export default function SubirInvitacionPage() {
       router.push(`/evento/${event.slug}`);
     } catch (error) {
       console.error("Error creating event:", error);
-      alert("Error al crear el evento. Intenta de nuevo.");
+      alert(formatErrorMessage(error, "Error al crear el evento. Intenta de nuevo."));
     } finally {
       setLoading(false);
     }
