@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase";
+import { combineDateAndTime, formatDate, formatTime } from "@/lib/utils";
 import type { Event, Photo } from "@/types";
 
 type StoredGuestProfile = {
@@ -43,6 +44,7 @@ export default function AlbumPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
   const [storedGuestProfile] = useState(() => getStoredGuestProfile(guestProfileStorageKey));
   const [guestName, setGuestName] = useState(storedGuestProfile.name ?? "");
   const [guestEmail, setGuestEmail] = useState(storedGuestProfile.email ?? "");
@@ -118,10 +120,26 @@ export default function AlbumPage() {
     fetchData();
   }, [slug]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !event || !guestName.trim()) {
       alert("Por favor ingresa tu nombre antes de subir fotos");
+      return;
+    }
+
+    const albumOpenAt = combineDateAndTime(event.date, event.time);
+    if (Date.now() < albumOpenAt.getTime()) {
+      alert(
+        `El album se habilita el ${formatDate(event.date)} a las ${formatTime(albumOpenAt)}.`
+      );
       return;
     }
 
@@ -248,6 +266,9 @@ export default function AlbumPage() {
     );
   }
 
+  const albumOpenAt = combineDateAndTime(event.date, event.time);
+  const canUploadPhotos = nowTimestamp >= albumOpenAt.getTime();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
       {/* Header */}
@@ -316,10 +337,11 @@ export default function AlbumPage() {
                 onChange={handleFileSelect}
                 className="hidden"
                 id="photo-upload"
+                disabled={!canUploadPhotos || uploading || !guestName.trim()}
               />
               <Button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || !guestName.trim()}
+                disabled={uploading || !guestName.trim() || !canUploadPhotos}
                 className="w-full bg-[#D4AF37] hover:bg-[#B8962E] text-white"
               >
                 {uploading ? (
@@ -330,13 +352,18 @@ export default function AlbumPage() {
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Subir fotos
+                    {canUploadPhotos ? "Subir fotos" : "Album bloqueado"}
                   </>
                 )}
               </Button>
             </div>
           </div>
           
+          {!canUploadPhotos && (
+            <p className="text-sm text-amber-700 mb-2">
+              El album se habilita el {formatDate(event.date)} a las {formatTime(albumOpenAt)}.
+            </p>
+          )}
           {!guestName.trim() && (
             <p className="text-sm text-amber-600">Ingresa tu nombre para poder subir fotos</p>
           )}
@@ -345,6 +372,9 @@ export default function AlbumPage() {
               Guardaremos estos datos en este dispositivo para no pedirlos de nuevo.
             </p>
           )}
+          <p className="text-xs text-gray-500 mt-2">
+            Por ahora solo se admiten imagenes (JPG, PNG, WEBP). Videos aun no estan habilitados.
+          </p>
         </div>
       </section>
 

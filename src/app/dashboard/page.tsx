@@ -5,17 +5,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
   Heart, Plus, Calendar, Users, Image as ImageIcon, 
-  MoreVertical, Eye, Edit, Trash2, Share2, LogOut,
-  CheckCircle, Clock, XCircle, Upload
+  Eye, Edit, Trash2, Share2, LogOut, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase";
 import type { Event } from "@/types";
 
+type DashboardUser = {
+  email?: string | null;
+  user_metadata?: {
+    full_name?: string;
+  };
+} | null;
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<DashboardUser>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -190,51 +196,56 @@ export default function DashboardPage() {
                     })}
                   </p>
 
-                  {/* Quick Stats */}
-                  <div className="flex items-center gap-4 mb-4 text-sm">
-                    <div className="flex items-center gap-1 text-gray-500">
-                      <Users className="w-4 h-4" />
-                      <span>0</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-green-600">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>0</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-amber-600">
-                      <Clock className="w-4 h-4" />
-                      <span>0</span>
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Usa Panel para ver confirmados/no asisten y Album para revisar fotos subidas.
+                  </p>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <Link href={`/evento/${event.slug}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Eye className="w-4 h-4 mr-1" />
-                        Ver
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/dashboard/evento/${event.id}/invitados`} className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Users className="w-4 h-4 mr-1" />
+                          Panel
+                        </Button>
+                      </Link>
+                      <Link href={`/dashboard/evento/${event.id}/album`} className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <ImageIcon className="w-4 h-4 mr-1" />
+                          Album
+                        </Button>
+                      </Link>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Link href={`/evento/${event.slug}`} className="flex-1" target="_blank">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Eye className="w-4 h-4 mr-1" />
+                          Invitacion
+                        </Button>
+                      </Link>
+                      <Link href={`/dashboard/editor/${event.id}`} className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Edit className="w-4 h-4 mr-1" />
+                          Editar
+                        </Button>
+                      </Link>
+                      <Button 
+                        variant="outline" 
+                        size="icon"
+                        onClick={() => copyEventLink(event.slug)}
+                      >
+                        <Share2 className="w-4 h-4" />
                       </Button>
-                    </Link>
-                    <Link href={`/dashboard/editor/${event.id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Edit className="w-4 h-4 mr-1" />
-                        Editar
+                      <Button 
+                        variant="outline" 
+                        size="icon"
+                        onClick={() => handleDeleteEvent(event.id)}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
-                    </Link>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={() => copyEventLink(event.slug)}
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={() => handleDeleteEvent(event.id)}
-                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
