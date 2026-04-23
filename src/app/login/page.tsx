@@ -25,9 +25,14 @@ export default function LoginPage() {
     const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
     const hasConfiguredSiteUrl =
       configuredSiteUrl && /^https?:\/\//i.test(configuredSiteUrl);
-    const baseUrl = hasConfiguredSiteUrl
-      ? configuredSiteUrl
-      : window.location.origin;
+    const browserOrigin = window.location.origin;
+    const browserHost = window.location.hostname;
+    const isLocalBrowserHost =
+      browserHost === "localhost" || browserHost === "127.0.0.1";
+    const baseUrl =
+      !isLocalBrowserHost || !hasConfiguredSiteUrl
+        ? browserOrigin
+        : configuredSiteUrl;
 
     return new URL("/auth/callback", baseUrl).toString();
   };

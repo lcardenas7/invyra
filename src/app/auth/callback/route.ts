@@ -10,5 +10,16 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code)
   }
 
-  return NextResponse.redirect(new URL('/dashboard', requestUrl.origin))
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  const hasConfiguredSiteUrl =
+    configuredSiteUrl && /^https?:\/\//i.test(configuredSiteUrl)
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') ?? 'https'
+  const publicOrigin = hasConfiguredSiteUrl
+    ? configuredSiteUrl
+    : forwardedHost
+      ? `${forwardedProto}://${forwardedHost}`
+      : requestUrl.origin
+
+  return NextResponse.redirect(new URL('/dashboard', publicOrigin))
 }
