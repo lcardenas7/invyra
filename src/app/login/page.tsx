@@ -21,20 +21,40 @@ export default function LoginPage() {
     name: "",
   });
 
+  const getOAuthRedirectTo = () => {
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    const hasConfiguredSiteUrl =
+      configuredSiteUrl && /^https?:\/\//i.test(configuredSiteUrl);
+    const baseUrl = hasConfiguredSiteUrl
+      ? configuredSiteUrl
+      : window.location.origin;
+
+    return new URL("/auth/callback", baseUrl).toString();
+  };
+
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError("");
     
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
+      const redirectTo = getOAuthRedirectTo();
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo,
+          skipBrowserRedirect: true,
         },
       });
-      
+
       if (error) throw error;
+      if (!data?.url) {
+        throw new Error("No se pudo generar la URL de autenticacion.");
+      }
+
+      const oauthUrl = new URL(data.url);
+      oauthUrl.searchParams.set("redirect_to", redirectTo);
+      window.location.assign(oauthUrl.toString());
     } catch (err: any) {
       setError(err.message || "Error al iniciar sesión con Google");
       setLoading(false);
